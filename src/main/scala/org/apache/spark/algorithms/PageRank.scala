@@ -17,42 +17,62 @@
 
 package org.apache.spark.algorithms
 
+import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkContext, SparkConf}
 
+import scala.reflect.ClassTag
+
+// TODO: Add slides
+/*
+ * Implements PageRank
+ * as described in Mining Massive Datasets course
+ * https://class.coursera.org/mmds-002/lecture
+ *
+ */
 object PageRank {
 
+  // TODO: make it usable through spark-submit
   def main(args: Array[String]) {
-    if (args.length < 1) {
+    if (args.length < 2) {
       System.err.println("Usage: SparkPageRank <file> <iter>")
       System.exit(1)
     }
-
-    val d = 0.85
     val sparkConf = new SparkConf().setAppName("PageRank").setMaster("local")
-    val iters = if (args.length > 1) args(1).toInt else 10
+    val iters = args(1).toInt
     val ctx = new SparkContext(sparkConf)
     val lines = ctx.textFile(args(0), 1)
     val edges = lines.map{ s =>
       val parts = s.split("\\s+")
       (parts(0), parts(1))
     }
-    val vertices = edges.flatMap { case(a, b) => Array(a, b) }.distinct()
+    val ranks = run(edges, iters)
+    val output = ranks.take(20).sortBy(-_._2)
+    output.foreach { case (id, rank) => println(id + " has rank: " + rank) }
+    ctx.stop()
+  }
+
+  // TODO: implement withe epsilon instead of max iterations
+  def run[T](edges: RDD[(T, T)], iters: Int)(implicit m: ClassTag[T]): RDD[(T, Double)] = {
+    val d = 0.85
+    val vertices = edges.flatMap{ case(a, b) => Seq(a, b) }.distinct()
     val n = vertices.count()
     val defaultRank = 1.0 / n
     var ranks = vertices.map(v => (v, defaultRank))
     val outGoingSizes = edges.map( x => (x._1, 1)).reduceByKey(_ + _)
     val outgoingEdges = edges.join(outGoingSizes)
+    // TODO: perform caching
     for (i <- 1 to iters) {
       val inboundRanks = outgoingEdges.join(ranks).map {
         case (start, ((end, startOutGoingSize), startRank)) =>
           (end, d * startRank / startOutGoingSize)
       }.reduceByKey(_ + _)
       val leakedRank = (1 - inboundRanks.values.sum) / n
-      ranks = ranks.leftOuterJoin(inboundRanks).map { case (id, (_, option)) => (id, option.getOrElse(0.0) + leakedRank)}
+      ranks = ranks.leftOuterJoin(inboundRanks).map {
+        case (id, (_, option)) =>
+          (id, option.getOrElse(0.0) + leakedRank)
+      }
       ranks.count()
     }
-    val output = ranks.sortByKey().collect()
-    output.foreach(tup => println(tup._1 + " has rank: " + tup._2))
-    ctx.stop()
+    ranks
   }
 }

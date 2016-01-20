@@ -18,5 +18,5 @@
 package org.apache.spark.algorithms
 
 class PageRankSuite {
-
+// TODO: write correctness test with the example from Wikipedia
 }
