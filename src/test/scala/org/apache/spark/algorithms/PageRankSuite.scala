@@ -18,6 +18,7 @@
 package org.apache.spark.algorithms
 
 import org.apache.spark.algorithms.util.SparkTestContext
+import org.apache.spark.graphx.util.GraphGenerators
 import org.scalatest.FunSuite
 
 class PageRankSuite extends FunSuite with SparkTestContext {
@@ -37,5 +38,13 @@ class PageRankSuite extends FunSuite with SparkTestContext {
     val output = ranks.collect()
     val eps = 0.01
     output.foreach { case (id, rank) => assert(trueRanks(id) / 100 - rank < eps)}
+  }
+
+  test ("Generated graph test") {
+    val numVertices = 10
+    val graph = GraphGenerators.logNormalGraph(sc, numVertices)
+    val edges = graph.edges.map( edge => (edge.srcId.toLong, edge.dstId.toLong))
+    val ranks = PageRank.run(edges, 50)
+    ranks.take(20).foreach{ case (id, rank) => println(id + " has rank: " + rank) }
   }
 }

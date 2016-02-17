@@ -34,21 +34,23 @@ object PageRank {
   // TODO: make it usable through spark-submit
   def main(args: Array[String]) {
     if (args.length < 2) {
-      System.err.println("Usage: SparkPageRank <file> <iter>")
+      System.err.println("Usage: SparkPageRank <file> <iter> optional:<outputfile>")
       System.exit(1)
     }
-    val sparkConf = new SparkConf().setAppName("PageRank").setMaster("local")
-    val iters = args(1).toInt
+    val sparkConf = new SparkConf().setAppName("PageRank")
     val ctx = new SparkContext(sparkConf)
+    val iters = args(1).toInt
     val lines = ctx.textFile(args(0), 1)
     val edges = lines.map{ s =>
       val parts = s.split("\\s+")
       (parts(0), parts(1))
     }
     val ranks = run(edges, iters)
-    val output = ranks.take(20).sortBy(-_._2)
+    val output = ranks.take(20)
     output.foreach { case (id, rank) => println(id + " has rank: " + rank) }
-    ctx.stop()
+    if (args.length > 2) {
+      ranks.saveAsTextFile(args(2))
+    }
   }
 
   // TODO: implement withe epsilon instead of max iterations
