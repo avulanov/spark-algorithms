@@ -17,6 +17,25 @@
 
 package org.apache.spark.algorithms
 
-class PageRankSuite {
-// TODO: write correctness test with the example from Wikipedia
+import org.apache.spark.algorithms.util.SparkTestContext
+import org.scalatest.FunSuite
+
+class PageRankSuite extends FunSuite with SparkTestContext {
+  /**
+    * Example from https://en.wikipedia.org/wiki/PageRank
+    *
+    */
+  test ("Wikipedia pagerank example") {
+    val trueRanks = Map("A" -> 3.3, "B" -> 38.4, "C" -> 34.3, "D" -> 3.9, "E" -> 8.1,
+      "F" -> 3.9, "G" -> 1.6, "H" -> 1.6, "I" -> 1.6, "J" -> 1.6, "K" -> 1.6)
+    val lines = sc.textFile("data/pagerank.txt", 1)
+    val edges = lines.map{ s =>
+      val parts = s.split("\\s+")
+      (parts(0), parts(1))
+    }
+    val ranks = PageRank.run(edges, 50)
+    val output = ranks.collect()
+    val eps = 0.01
+    output.foreach { case (id, rank) => assert(trueRanks(id) / 100 - rank < eps)}
+  }
 }
