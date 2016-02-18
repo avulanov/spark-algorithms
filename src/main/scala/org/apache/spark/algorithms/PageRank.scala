@@ -59,22 +59,31 @@ object PageRank {
     val vertices = edges.flatMap{ case(a, b) => Seq(a, b) }.distinct()
     val n = vertices.count()
     val defaultRank = 1.0 / n
-    var ranks = vertices.map(v => (v, defaultRank))
+    var ranks = vertices.map(v => (v, defaultRank)).cache()
+    ranks.count()
+    var oldRanks = ranks
     val outGoingSizes = edges.map( x => (x._1, 1)).reduceByKey(_ + _)
-    val outgoingEdges = edges.join(outGoingSizes)
+    // cache outgoingEdges
+    val outgoingEdges = edges.join(outGoingSizes).cache()
+    outGoingSizes.count()
     // TODO: perform caching
     for (i <- 1 to iters) {
       val inboundRanks = outgoingEdges.join(ranks).map {
         case (start, ((end, startOutGoingSize), startRank)) =>
           (end, d * startRank / startOutGoingSize)
-      }.reduceByKey(_ + _)
+      }.reduceByKey(_ + _).cache()
       val leakedRank = (1 - inboundRanks.values.sum) / n
+      oldRanks = ranks
       ranks = ranks.leftOuterJoin(inboundRanks).map {
         case (id, (_, option)) =>
           (id, option.getOrElse(0.0) + leakedRank)
-      }
+      }.cache()
       ranks.count()
+      oldRanks.unpersist()
+      inboundRanks.unpersist()
     }
+    // unpersist outgoingEdges
+    outgoingEdges.unpersist()
     ranks
   }
 }
