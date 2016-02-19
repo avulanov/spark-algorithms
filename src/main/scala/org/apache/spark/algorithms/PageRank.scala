@@ -56,7 +56,7 @@ object PageRank {
   // TODO: implement withe epsilon instead of max iterations
   def run[T](edges: RDD[(T, T)], iters: Int)(implicit m: ClassTag[T]): RDD[(T, Double)] = {
     val d = 0.85
-    val vertices = edges.flatMap{ case(a, b) => Seq(a, b) }.distinct()
+    val vertices = edges.flatMap { case(a, b) => Seq(a, b) }.distinct()
     val n = vertices.count()
     val defaultRank = 1.0 / n
     var ranks = vertices.map(v => (v, defaultRank)).cache()
@@ -69,10 +69,11 @@ object PageRank {
     // TODO: perform caching
     for (i <- 1 to iters) {
       val inboundRanks = outgoingEdges.join(ranks).map {
-        case (start, ((end, startOutGoingSize), startRank)) =>
-          (end, d * startRank / startOutGoingSize)
+        case (src, ((dst, startOutGoingSize), srcRank)) =>
+          (dst, d * srcRank / startOutGoingSize)
       }.reduceByKey(_ + _).cache()
-      val leakedRank = (1 - inboundRanks.values.sum) / n
+      val sum = inboundRanks.values.sum()
+      val leakedRank = (1 - sum) / n
       oldRanks = ranks
       ranks = ranks.leftOuterJoin(inboundRanks).map {
         case (id, (_, option)) =>

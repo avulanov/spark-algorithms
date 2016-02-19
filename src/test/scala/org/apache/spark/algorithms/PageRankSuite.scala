@@ -44,8 +44,8 @@ class PageRankSuite extends FunSuite with SparkTestContext {
 //  }
 
   test ("Generated graph test") {
-    val numVertices = 100
-    val numIter = 10
+    val numVertices = 1000
+    val numIter = 100
     val graph = GraphGenerators.logNormalGraph(sc, numVertices, seed = 11L).cache()
     graph.edges.foreachPartition( x => {} )
     val edges = graph.edges.map( edge => (edge.srcId.toLong, edge.dstId.toLong)).cache()
@@ -54,14 +54,12 @@ class PageRankSuite extends FunSuite with SparkTestContext {
     val ranks = PageRank.run(edges, numIter)
     t = System.nanoTime() - t
     println("RDD Pagerank t:" + t / 10e9 + " s")
-    //ranks.take(20).foreach{ case (id, rank) => println(id + " has rank: " + rank) }
     edges.unpersist()
     ranks.unpersist()
     var tGraphX = System.nanoTime()
     val ranksGraphX = PageRankGraphX.run(graph, numIter)
     tGraphX = System.nanoTime() - tGraphX
     println("GraphX Pagerank t:" + tGraphX / 10e9 + " s")
-    //ranksGraphX.vertices.take(20).foreach{ case (id, rank) => println(id + " has rank: " + rank) }
     graph.unpersist()
     ranksGraphX.unpersist()
   }
