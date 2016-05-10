@@ -1,6 +1,7 @@
 package org.apache.spark.algorithms.util
 
 import org.apache.log4j.{LogManager, Logger, Level}
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
 import org.scalatest.{Suite, BeforeAndAfterAll}
 

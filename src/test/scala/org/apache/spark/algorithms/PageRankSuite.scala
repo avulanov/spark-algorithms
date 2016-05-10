@@ -23,6 +23,10 @@ import org.apache.spark.graphx.{Edge, Graph}
 import org.apache.spark.graphx.util.GraphGenerators
 import org.scalatest.FunSuite
 import org.apache.spark.graphx.lib.{PageRank => PageRankGraphX}
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.functions._
+import org.apache.spark.SparkContext._
+
 
 class PageRankSuite extends FunSuite with SparkTestContext {
   /**
@@ -43,26 +47,55 @@ class PageRankSuite extends FunSuite with SparkTestContext {
 //    output.foreach { case (id, rank) => assert(trueRanks(id) / 100 - rank < eps)}
 //  }
 
-  test ("Generated graph test") {
-    val numVertices = 1000
-    val numIter = 100
-    val graph = GraphGenerators.logNormalGraph(sc, numVertices, seed = 11L).cache()
-    graph.edges.foreachPartition( x => {} )
-    val edges = graph.edges.map( edge => (edge.srcId.toLong, edge.dstId.toLong)).cache()
-    edges.count()
-    var t = System.nanoTime()
-    val ranks = PageRank.run(edges, numIter)
-    t = System.nanoTime() - t
-    println("RDD Pagerank t:" + t / 10e9 + " s")
-    edges.unpersist()
-    ranks.unpersist()
-    var tGraphX = System.nanoTime()
-    val ranksGraphX = PageRankGraphX.run(graph, numIter)
-    tGraphX = System.nanoTime() - tGraphX
-    println("GraphX Pagerank t:" + tGraphX / 10e9 + " s")
-    graph.unpersist()
-    ranksGraphX.unpersist()
-  }
+    test ("Wikipedia pagerank (DataFrame) example") {
+      val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+      import sqlContext.implicits._
+      val trueRanks = Map("A" -> 3.3, "B" -> 38.4, "C" -> 34.3, "D" -> 3.9, "E" -> 8.1,
+        "F" -> 3.9, "G" -> 1.6, "H" -> 1.6, "I" -> 1.6, "J" -> 1.6, "K" -> 1.6)
+      val lines = sc.textFile("data/wiki.txt", 1)
+      val edges = lines.map{ s =>
+        val parts = s.split("\\s+")
+        (parts(0), parts(1))
+      }.toDF("from", "to")
+      val ranks = PageRank.runWithDataFrames(edges, 50)
+      val output = ranks.collect()
+      val eps = 0.01
+      output.foreach { println(_)}
+      //output.foreach { case (id, rank) => assert(trueRanks(id) / 100 - rank < eps)}
+    }
+
+//  test ("Generated graph test") {
+//    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+//    import sqlContext.implicits._
+//    val numVertices = 10
+//    val numIter = 10
+//    val graph = GraphGenerators.logNormalGraph(sc, numVertices, seed = 11L).cache()
+//    graph.edges.foreachPartition( x => {} )
+//    val edges = graph.edges.map( edge => (edge.srcId.toLong, edge.dstId.toLong)).cache()
+//    edges.count()
+//    // RDD PageRank
+//    var t = System.nanoTime()
+//    val ranks = PageRank.runWithRDD(edges, numIter)
+//    t = System.nanoTime() - t
+//    println("RDD Pagerank t:" + t / 10e9 + " s")
+//    edges.unpersist()
+//    ranks.unpersist()
+//    // DF PageRank
+//    var tDF = System.nanoTime()
+//    val dfEdges = edges.toDF("from", "to").cache()
+//    dfEdges.count()
+//    val ranksDF = PageRank.runWithDataFrames(dfEdges, numIter)
+//    tDF = System.nanoTime() - tDF
+//    println("DF Pagerank t:" + tDF / 10e9 + " s")
+//    ranksDF.unpersist()
+//    // GraphX PageRank
+//    var tGraphX = System.nanoTime()
+//    val ranksGraphX = PageRankGraphX.run(graph, numIter)
+//    tGraphX = System.nanoTime() - tGraphX
+//    println("GraphX Pagerank t:" + tGraphX / 10e9 + " s")
+//    ranksGraphX.unpersist()
+//    graph.unpersist()
+//  }
 
 //    test ("Wikipedia pagerank example for GraphX") {
 //      val trueRanks = Map(1L -> 3.3, 2L -> 38.4, 3L -> 34.3, 4L -> 3.9, 5L -> 8.1,

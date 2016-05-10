@@ -19,6 +19,8 @@ package org.apache.spark.algorithms
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.functions._
 
 import scala.reflect.ClassTag
 
@@ -45,7 +47,7 @@ object PageRank {
       val parts = s.split("\\s+")
       (parts(0), parts(1))
     }
-    val ranks = run(edges, iters)
+    val ranks = runWithRDD(edges, iters)
     val output = ranks.take(20)
     output.foreach { case (id, rank) => println(id + " has rank: " + rank) }
     if (args.length > 2) {
@@ -54,7 +56,7 @@ object PageRank {
   }
 
   // TODO: implement withe epsilon instead of max iterations
-  def run[T](edges: RDD[(T, T)], iters: Int)(implicit m: ClassTag[T]): RDD[(T, Double)] = {
+  def runWithRDD[T](edges: RDD[(T, T)], iters: Int)(implicit m: ClassTag[T]): RDD[(T, Double)] = {
     val d = 0.85
     val vertices = edges.flatMap { case(a, b) => Seq(a, b) }.distinct()
     val n = vertices.count()
@@ -87,4 +89,57 @@ object PageRank {
     outgoingEdges.unpersist()
     ranks
   }
+  // TODO: implement withe epsilon instead of max iterations
+  def runWithDataFrames[T](edges: DataFrame, iters: Int)(implicit m: ClassTag[T]): DataFrame = {
+    import edges.sqlContext.implicits._
+    val d = 0.85
+    val vertices = edges.select("from").unionAll(edges.select("to")).distinct()
+    val n = vertices.count()
+    val defaultRank = 1.0 / n
+    // TODO: find a straight forward way to add column to the DataFrame
+    var ranks = vertices
+      .select(vertices("from").as("id"),
+        when(vertices("from").isNotNull, defaultRank).otherwise(defaultRank).as("rank"))
+      .cache()
+    // materialize
+    ranks.count()
+    var oldRanks = ranks
+    val outGoingSizes = edges
+      .groupBy("from")
+      .count()
+      .toDF("from", "outDegree")
+    val outGoingEdges = edges
+      .join(outGoingSizes, "from")
+      .cache()
+    // materialize
+    outGoingSizes.count()
+    for (i <- 1 to iters) {
+      val inboundRanks = outGoingEdges
+        .join(ranks, $"from" === $"id")
+        .select($"to", ($"rank" / $"outDegree" * d).as("partialRank"))
+        .groupBy("to")
+        .sum("partialRank")
+        .toDF("to", "newRank")
+        .cache()
+      // materialize
+      inboundRanks.count()
+      val sum = inboundRanks.groupBy().sum("newRank").take(1)(0).getDouble(0)
+      val leakedRank = (1 - sum) / n
+      oldRanks = ranks
+      val partialJoin = ranks.join(inboundRanks, $"id" === $"to", "outer")
+      ranks = partialJoin
+        .select( $"id",
+          when(partialJoin("newRank").isNull, leakedRank)
+            .otherwise($"newRank" + leakedRank).as("rank"))
+        .cache()
+      ranks.count()
+      // dematerialize both
+      oldRanks.unpersist()
+      inboundRanks.unpersist()
+    }
+    // unpersist outgoingEdges
+    outGoingEdges.unpersist()
+    ranks
+  }
+
 }
