@@ -93,7 +93,7 @@ object PageRank {
   def runWithDataFrames[T](edges: DataFrame, iters: Int)(implicit m: ClassTag[T]): DataFrame = {
     import edges.sqlContext.implicits._
     val d = 0.85
-    val vertices = edges.select("from").unionAll(edges.select("to")).distinct()
+    val vertices = edges.select("from").unionAll(edges.select("to")).distinct().cache()
     val n = vertices.count()
     val defaultRank = 1.0 / n
     // TODO: find a straight forward way to add column to the DataFrame
@@ -142,4 +142,11 @@ object PageRank {
     ranks
   }
 
+  def runWithSparse[T](edges: RDD[(T, T)], iters: Int)
+                      (implicit m: ClassTag[T]): RDD[(T, Double)] = {
+    // convert to sparse representation
+    // run algorithm
+    // return ranks
+    return null
+  }
 }
